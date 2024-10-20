@@ -8,8 +8,7 @@ Currently implemented are loading methods for
 import numpy as np
 from unyt import Msun, yr
 
-from regrid_sfh import get_grid_map, rebin_grid
-
+from synthesizer.load_data.regrid_sfh import get_grid_map, rebin_grid
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
@@ -34,6 +33,8 @@ def load_SCSAM(
             'parametric' rebins the SFH grid to the SPS grid binning
         redshift (float):
             Redshift of the galaxies that will be loaded
+            Could rewrite code to read this from the file. For now,
+            assume all galaxies in the file have the same redshift
         cosmo (object):
             Astropy cosmology object
         grid (grid object):
@@ -103,6 +104,7 @@ def load_SCSAM(
             if len(age_lst) != age_len:
                 print("Wrong number of age bins.")
                 break
+            age_lst = np.array(age_lst) * 1e9 # yr
 
         # Get galaxy data
         # The data chunk for each galaxy consists of one header line,
@@ -136,18 +138,19 @@ def load_SCSAM(
             SFH = np.array(SFH) * 10**9  # Msun
 
             # Convert age axis of SFH grid from age of the universe to stellar ages
-            SFH = _universe_to_stellar_age(
-                SFH, old_age, redshift, cosmo, check_bin=True, verbose=True
+            SFH, stellar_age_lst = _universe_to_stellar_age(
+                SFH, age_lst, redshift, cosmo, check_bins=True, verbose=True
             )
 
             # Create galaxy object
             if method == "particle":
                 galaxy = _load_SCSAM_particle_galaxy(
-                    SFH, age_lst, Z_lst, verbose=verbose
+                    SFH, stellar_age_lst, Z_lst, verbose=verbose
                 )
             elif method == "parametric":
                 galaxy = _load_SCSAM_parametric_galaxy(
-                    SFH, age_lst, Z_lst, grid, grid_map, verbose=verbose
+                    SFH, stellar_age_lst, Z_lst, grid,
+                    grid_map, verbose=verbose
                 )
             else:
                 raise ValueError("Method not recognised.")
@@ -163,7 +166,9 @@ def load_SCSAM(
 def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
     """
     Treat each age-Z bin as a particle.
-    PSA: From what I recall, this method does not work very well.
+    PSA: From what I recall, this method does not work very well. May
+    need to do some sampling instead of treating each grid cell as
+    a particle.
 
     Args:
     SFH: age x Z SFH array as given by SC-SAM for a single galaxy
@@ -189,14 +194,14 @@ def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
                 continue
             else:
                 p_imass.append(SFH[age_ind][Z_ind])  # Msun
-                p_age.append(age_lst[age_ind])  # Gyr
+                p_age.append(age_lst[age_ind])  # yr
                 p_Z.append(Z_lst[Z_ind])  # unitless
 
     # Convert units
     if verbose:
         print("Converting units...")
     p_imass = np.array(p_imass)  # Msun
-    p_age = np.array(p_age) * 10**9  # yr
+    p_age = np.array(p_age)  # yr
     p_Z = np.array(p_Z)  # unitless
 
     if verbose:
@@ -235,11 +240,11 @@ def _load_SCSAM_parametric_galaxy(
     # SPS grid that we want to regrid to
     new_age = 10**grid.log10age  # yr
     new_Z = np.log10(grid.metallicity)  # log10Z
-    new_age_edges, new_Z_edges = _get_sps_bin_edges(grid)
+    new_age_edges, new_Z_edges = _get_sps_bin_edges(grid, verbose)
     new_grid_dim = (len(new_age), len(new_Z))
 
     # Original SFH grid output by SAM
-    old_age = np.array(age_lst) * 10**9  # yr
+    old_age = age_lst
     old_Z = np.log10(Z_lst)  # log10Z
     old_age_edges, old_Z_edges = _get_scsam_bin_edges(
         old_age, old_Z, verbose=True
@@ -337,9 +342,9 @@ def _universe_to_stellar_age(
         # Check if total mass is conserved
         old_sfh_mass = np.sum(np.array(SFH))
         new_sfh_mass = np.sum(np.array(SFH)[keep_bins])
-        print(f'Original SFH grid total mass: {new_sfh_mass:5e} Msun')
-        print(f'New SFH grid total mass: {new_sfh_mass:5e} Msun')
-        if np.abs(old_sfh_mass-new_sfh_mass)<1e-10:
+        print(f'Original SFH grid total mass: {new_sfh_mass:e} Msun')
+        print(f'New SFH grid total mass: {new_sfh_mass:e} Msun')
+        if np.abs(old_sfh_mass-new_sfh_mass)<1e-8:
             print('Mass in the SFH grid is conserved!')
         else:
             raise ValueError('Total mass is not conserved.')
@@ -366,7 +371,7 @@ def _universe_to_stellar_age(
     # Mask the SFH array
     new_SFH = np.array(SFH)[keep_bins]
     if verbose:
-        print(f'The new SFH has shape {SFH.shape}.')
+        print(f'The new SFH has shape {new_SFH.shape}.')
 
     # Flip arrays to be in order of ascending stellar age
     new_age_bins = np.flip(new_age_bins)
@@ -409,11 +414,11 @@ def _get_scsam_bin_edges(
     #    centre minus half the bin width
     # 3. Highest bin edge is highest bin + half the bin width
     # 4. The remaining bin edges lie equidistant between bin centres
-    binw = np.array(age_bins)[-1] - np.array(age_bins)[-2]
+    binw = age_bins[-1] - age_bins[-2]
     age_edges = np.empty(len(age_bins)+1)
     age_edges[0] = 0.
-    age_edges[1] = sam_age_stars[1]-binw/2
-    age_edges[2:] = np.array(sam_age_stars)[1:] + binw/2
+    age_edges[1] = age_bins[1]-binw/2
+    age_edges[2:] = age_bins[1:] + binw/2
     if verbose:
         print(f'The stellar age bin edges are: {age_edges}')
 
@@ -425,7 +430,7 @@ def _get_scsam_bin_edges(
     log10metal_edges = np.empty(len(log10metal_bins)+1)
     log10metal_edges[0] = log10metal_bins[0]
     log10metal_edges[-1] = log10metal_bins[-1]
-    log10metal_bins[1:-1] = np.array(log10metal_bins)[:-1] + \
+    log10metal_edges[1:-1] = np.array(log10metal_bins)[:-1] + \
         np.diff(log10metal_bins)/2
     if verbose:
         print(f'The log10Z bin edges are: {log10metal_edges}')
@@ -435,6 +440,7 @@ def _get_scsam_bin_edges(
 
 def _get_sps_bin_edges(
         grid,
+        verbose=False,
 ):
 
     """
@@ -462,7 +468,7 @@ def _get_sps_bin_edges(
     age_edges = np.empty(len(age_bins)+1)
     age_edges[0] = 0.
     age_edges[-1] = age_bins[-1]
-    age_bins[1:-1] = np.array(age_bins)[:-1] + np.diff(age_bins)/2
+    age_edges[1:-1] = np.array(age_bins)[:-1] + np.diff(age_bins)/2
     if verbose:
         print(f'The stellar age bin edges are: {age_edges}')
 
@@ -477,7 +483,7 @@ def _get_sps_bin_edges(
     log10metal_edges = np.empty(len(log10metal_bins)+1)
     log10metal_edges[0] = log10metal_bins[0]
     log10metal_edges[-1] = log10metal_bins[-1]
-    log10metal_bins[1:-1] = np.array(log10metal_bins)[:-1] + \
+    log10metal_edges[1:-1] = np.array(log10metal_bins)[:-1] + \
         np.diff(log10metal_bins)/2
     if verbose:
         print(f'The log10Z bin edges are: {log10metal_edges}')

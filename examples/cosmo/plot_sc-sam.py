@@ -5,6 +5,7 @@ SC-SAM example
 Load SC-SAM example data into a list of galaxy objects.
 """
 
+from astropy.cosmology import Planck15
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -30,24 +31,21 @@ if __name__ == "__main__":
 
     # Load example SC-SAM SF history (just contains 10 galaxies)
     test_data = "../../tests/data/sc-sam_sfhist.dat"
+    z = 4.99988 # redshift of galaxies in test_data
+
     # Obtain galaxy objects using different methods:
     # Particle method
-    particle_galaxies, _, _ = load_SCSAM(test_data, "particle")
-    # Paramteric method, interpolating the grid using scipy's
-    # nearest ND interpolator
-    parametric_NNI_galaxies, _, _ = load_SCSAM(
-        test_data, "parametric_NNI", grid
+    particle_galaxies, _, _ = load_SCSAM(
+        test_data, "particle", redshift=z, cosmo=Planck15
     )
-    # Paramteric method, interpolating the grid using scipy's
-    # regular grid interpolator
-    parametric_RGI_galaxies, _, _ = load_SCSAM(
-        test_data, "parametric_RGI", grid
+    # Paramteric method
+    parametric_galaxies, _, _ = load_SCSAM(
+        test_data, "parametric", redshift=z, cosmo=Planck15, grid=grid
     )
 
     # Set up arrays to store galaxy SEDs
     particle_SEDs = []
-    parametric_NNI_SEDs = []
-    parametric_RGI_SEDs = []
+    parametric_SEDs = []
 
     # Spectrum that we want
     # (e.g. incident, nebular, intrinsic, emergent)
@@ -62,16 +60,10 @@ if __name__ == "__main__":
         particle_SEDs.append(particle_sed.lnu)
 
         # Get SEDs for the parametric NNI galaxy object
-        parametric_NNI_galaxy = parametric_NNI_galaxies[i]
-        parametric_NNI_galaxy.stars.get_spectra(model)
-        parametric_sed = parametric_NNI_galaxy.stars.spectra[spectrum]
-        parametric_NNI_SEDs.append(parametric_sed.lnu)
-
-        # Get SEDs for the parametric RGI galaxy object
-        parametric_RGI_galaxy = parametric_RGI_galaxies[i]
-        parametric_RGI_galaxy.stars.get_spectra(model)
-        parametric_sed = parametric_RGI_galaxy.stars.spectra[spectrum]
-        parametric_RGI_SEDs.append(parametric_sed.lnu)
+        parametric_galaxy = parametric_galaxies[i]
+        parametric_galaxy.stars.get_spectra(model)
+        parametric_sed = parametric_galaxy.stars.spectra[spectrum]
+        parametric_SEDs.append(parametric_sed.lnu)
 
     # Plot SEDs
     for lnu in particle_SEDs:
@@ -82,11 +74,11 @@ if __name__ == "__main__":
         )
         plt.xlim(0, 8)
         plt.ylim(10, 35)
-        plt.title(f"simple particle method - {spectrum}")
+        plt.title(f"particle method - {spectrum}")
         plt.grid(color="whitesmoke")
     plt.show()
 
-    for lnu in parametric_NNI_SEDs:
+    for lnu in parametric_SEDs:
         plt.plot(np.log10(parametric_sed.lam), np.log10(lnu))
         plt.xlabel(r"$\log_{10}(\lambda/\rm{\AA})$")
         plt.ylabel(
@@ -94,18 +86,6 @@ if __name__ == "__main__":
         )
         plt.xlim(0, 8)
         plt.ylim(10, 35)
-        plt.title(f"NNI parametric method - {spectrum}")
-        plt.grid(color="whitesmoke")
-    plt.show()
-
-    for lnu in parametric_RGI_SEDs:
-        plt.plot(np.log10(parametric_sed.lam), np.log10(lnu))
-        plt.xlabel(r"$\log_{10}(\lambda/\rm{\AA})$")
-        plt.ylabel(
-            r"$\log_{10}(L_\nu/\rm{erg\,s^{-1}\,Hz^{-1}\,M_{\odot}^{-1}})$"
-        )
-        plt.xlim(0, 8)
-        plt.ylim(10, 35)
-        plt.title(f"RGI parametric method - {spectrum}")
+        plt.title(f"parametric method - {spectrum}")
         plt.grid(color="whitesmoke")
     plt.show()

@@ -36,8 +36,6 @@ def get_grid_map(
             Dictionary that contains information for mapping the old,
             original SFH grid to the desired new grid.
     """
-
-    print(new_metal_edges)
             
     # Get lengths
     old_age_lengths = np.diff(old_age_edges)
@@ -66,7 +64,6 @@ def get_grid_map(
         ok_low = (new_metal_edges[:-1] < old_up)
         ok_high = (new_metal_edges[1:] > old_low)
         ok_ind = np.where(ok_low & ok_high)[0]
-        print(ok_ind)
 
         # Along the metallicity axis, get the fraction of the old bin's
         # width that is occupied by each overlapping new bin
@@ -116,13 +113,6 @@ def get_grid_map(
         map_dict['metal_bin_index'][ii]['fraction'] = np.array(frac)
         if (old_metal_centres!=None).all():
             map_dict['metal_bin_index'][ii]['old_bin_value'] = old_metal_centres[ii]
-
-        if ii==11:
-            print('ii==11!')
-            print(old_up, old_low)
-            print(np.array(ok_ind))
-            # raise ValueError('Check')
-
 
     # Loop over each bin on the age axis of the old grid
     # Exactly the same procedure as before. To do: rewrite to loop over axes
@@ -222,7 +212,6 @@ def rebin_grid(
         
     # Empty SPS grid, to be populated
     new_SFH = np.zeros(new_grid_dim)
-    print(new_grid_dim)
 
     # Get i,j coordinates of old SFH
     xx = np.arange(0, np.array(SFH).shape[0], 1)
@@ -237,9 +226,6 @@ def rebin_grid(
     # Loop over each bin in the old grid with non-zero mass
     for (i, j) in zip(iis, jjs):
 
-        print('-------------------------------')
-        print(i, j)
-
         # Metallicity axis
         new_metal_ind = grid_map['metal_bin_index'][j]['new_grid_indices']
         new_metal_frac = grid_map['metal_bin_index'][j]['fraction']
@@ -247,8 +233,6 @@ def rebin_grid(
         # Age axis
         new_age_ind = grid_map['age_bin_index'][i]['new_grid_indices']
         new_age_frac = grid_map[f'age_bin_index'][i]['fraction']
-
-        print(new_age_ind, new_metal_ind)
 
         # Loop over each relevant SPS bin
         for (new_i, frac_i) in zip(new_age_ind, new_age_frac):

@@ -1,8 +1,9 @@
-"""A module for interfacing with the outputs of Semi Analytic Models.
+"""
+A module for interfacing with the outputs of SC-SAM.
 
-Currently implemented are loading methods for
-- SC-SAM (using a parametric method)
-- SC-SAM (using a particle method)
+Currently implemented:
+- Parametric SFH method
+- Particle SFH method
 """
 
 import numpy as np
@@ -38,7 +39,7 @@ def load_SCSAM(
         cosmo (object):
             Astropy cosmology object
         grid (grid object):
-            Grid object to extract from (needed for parametric method).
+            Grid object (needed for parametric method)
         grid_map (dict):
             Dictionary that contains information for mapping the old,
             original SFH grid to the desired new grid (needed for
@@ -166,14 +167,22 @@ def load_SCSAM(
 def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
     """
     Treat each age-Z bin as a particle.
-    PSA: From what I recall, this method does not work very well. May
-    need to do some sampling instead of treating each grid cell as
-    a particle.
+    PSA: Not sure how well this method works.
 
     Args:
-    SFH: age x Z SFH array as given by SC-SAM for a single galaxy
-    age_lst: age bins in the SFH array (yr)
-    Z_lst: metallicity bins in the SFH array (unitless)
+        SFH:
+            SC-SAM age x Z SFH array, with the age axis converted from
+            age of the universe to stellar ages.
+        age_lst:
+            Stellar age bins in the SFH array (yr)
+        Z_lst:
+            Metallicity bins in the SFH array (unitless)
+        verbose:
+            Are we talking?
+
+    Returns:
+        particle_galaxy:
+            Synthesizer particle galaxy object
     """
 
     # Initialise arrays for storing particle information
@@ -229,12 +238,25 @@ def _load_SCSAM_parametric_galaxy(
     Returns a galaxy object.
 
     Args:
-    SFH: age x Z SFH array as given by SC-SAM for a single galaxy
-    age_lst: age bins in the SFH array (Gyr)
-    Z_lst: metallicity bins in the SFH array (unitless)
-    method: method of interpolating the grid
-            'NNI' - scipy's nearest ND interpolator
-            'RGI' - scipy's regular grid interpolator
+        SFH:
+            SC-SAM age x Z SFH array, with the age axis converted from
+            age of the universe to stellar ages
+        age_lst:
+            Stellar age bins in the SFH array (yr)
+        Z_lst:
+            Metallicity bins in the SFH array (unitless)
+        grid (grid object):
+            Grid object, need to get SPS bin edges
+        grid_map (dict):
+            Dictionary that contains information for mapping the old,
+            original SFH grid to the desired new grid. Obtained from
+            get_grid_map function in regrid_sfh.py. 
+        verbose:
+            Are we talking?
+
+    Returns:
+        parametric_galaxy:
+            Synthesizer parametric galaxy object
     """
 
     # SPS grid that we want to regrid to
